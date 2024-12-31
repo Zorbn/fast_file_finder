@@ -6,6 +6,7 @@ import Cocoa
 struct Theme {
     let foreground: CGColor
     let background: CGColor
+    let border: CGColor
     let selected: CGColor
 }
 
@@ -18,19 +19,21 @@ let theme =
         Theme(
             foreground: CGColor(red: 1, green: 1, blue: 1, alpha: 1),
             background: CGColor(red: 0, green: 0, blue: 0, alpha: backgroundAlpha),
-            selected: CGColor(red: 0, green: 1, blue: 0, alpha: 1)
+            border: CGColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1),
+            selected: CGColor(red: 0, green: 0.8, blue: 0, alpha: 1)
         )
     } else {
         Theme(
             foreground: CGColor(red: 0, green: 0, blue: 0, alpha: 1),
             background: CGColor(red: 1, green: 1, blue: 1, alpha: backgroundAlpha),
+            border: CGColor(red: 0.8, green: 0.8, blue: 0.8, alpha: 1),
             selected: CGColor(red: 0, green: 0.5, blue: 0, alpha: 1)
         )
     }
 
 class View: NSView {
     var previouslyActivateApp: NSRunningApplication?
-    var inputText = FileManager.default.homeDirectoryForCurrentUser.path()
+    var inputText = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
     var results: [String] = []
     var selectedResultIndex = 0
     let font = CTFont("Menlo" as CFString, size: 24)
@@ -76,6 +79,7 @@ class View: NSView {
                 width: 2,
                 height: lineBounds.height))
 
+        context.setFillColor(theme.border)
         context.fill(
             CGRect(
                 x: 0, y: context.textPosition.y - lineBounds.height * 0.4,
@@ -125,6 +129,11 @@ class View: NSView {
                 case "\u{1b}":  // ESC
                     close()
                 case "\u{7f}":  // DEL
+                    if event.modifierFlags.contains(.command) {
+                        inputText.removeAll()
+                        break
+                    }
+
                     if inputText.last == "/" {
                         inputText.removeLast()
 
@@ -135,36 +144,19 @@ class View: NSView {
                         break
                     }
 
-                    if event.modifierFlags.contains(.command) {
-                        inputText.removeAll()
-                    } else if event.modifierFlags.contains(.option)
+                    if event.modifierFlags.contains(.option)
                         || event.modifierFlags.contains(.control)
                     {
-                        var removedChar = inputText.popLast()
-
-                        while let lastChar = removedChar {
-                            guard let nextChar = inputText.last else {
-                                break
-                            }
-
-                            if !lastChar.isWhitespace {
-                                if nextChar.isLetter != lastChar.isLetter
-                                    || nextChar.isNumber != lastChar.isNumber
-                                    || nextChar.isSymbol != lastChar.isSymbol
-                                {
-                                    break
-                                }
-                            }
-
-                            if nextChar.isWhitespace && !lastChar.isWhitespace {
-                                break
-                            }
-
-                            removedChar = inputText.popLast()
-                        }
-                    } else {
                         _ = inputText.popLast()
+
+                        while !inputText.isEmpty && inputText.last != "/" {
+                            inputText.removeLast()
+                        }
+
+                        break
                     }
+
+                    _ = inputText.popLast()
                 default:
                     if c.isLetter || c.isNumber || c.isSymbol || c.isPunctuation || c == " " {
                         inputText.append(c)
@@ -232,7 +224,7 @@ class View: NSView {
         }
 
         for file in files {
-            let path = file.path()
+            let path = file.path(percentEncoded: false)
 
             if path.count < inputText.count {
                 continue
