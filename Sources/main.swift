@@ -70,13 +70,12 @@ class View: NSView {
             }
 
         let attributedString = NSAttributedString(string: string, attributes: attributes)
-
         let line = CTLineCreateWithAttributedString(attributedString)
         let lineBounds = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
 
-        let offsetX = -max(lineBounds.width - bounds.width / 2, 0) + 8
+        let inputX = getTextOffsetX(lineWidth: lineBounds.width)
 
-        context.textPosition = CGPoint(x: offsetX, y: bounds.height - lineBounds.height)
+        context.textPosition = CGPoint(x: inputX, y: bounds.height - lineBounds.height)
         CTLineDraw(line, context)
 
         context.setFillColor(theme.foreground)
@@ -93,6 +92,12 @@ class View: NSView {
                 width: bounds.width,
                 height: 2))
 
+        let resultBaseAttributedString = NSAttributedString(
+            string: inputText, attributes: resultAttributes)
+        let resultBaseLine = CTLineCreateWithAttributedString(resultBaseAttributedString)
+        let resultBaseLineBounds = CTLineGetBoundsWithOptions(resultBaseLine, CTLineBoundsOptions())
+
+        let resultX = getTextOffsetX(lineWidth: resultBaseLineBounds.width)
         var resultY = lineBounds.height * 1.4
 
         for (i, result) in results.enumerated() {
@@ -104,15 +109,18 @@ class View: NSView {
                 }
 
             let attributedString = NSAttributedString(string: result, attributes: attributes)
-
             let line = CTLineCreateWithAttributedString(attributedString)
             let lineBounds = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
             resultY += lineBounds.height
 
-            context.textPosition = CGPoint(x: offsetX, y: bounds.height - resultY)
+            context.textPosition = CGPoint(x: resultX, y: bounds.height - resultY)
             CTLineDraw(line, context)
 
         }
+    }
+
+    func getTextOffsetX(lineWidth: CGFloat) -> CGFloat {
+        return -max(lineWidth - bounds.width / 2, 0) + 8
     }
 
     override func keyDown(with event: NSEvent) {
