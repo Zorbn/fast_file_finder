@@ -204,7 +204,7 @@ class View: NSView {
         }
     }
 
-    func updateResults() {
+    func getInputTextDirectory() -> String {
         let path =
             if let index = inputText.lastIndex(of: "/") {
                 inputText[...index]
@@ -212,6 +212,11 @@ class View: NSView {
                 inputText[...]
             }
 
+        return String(path)
+    }
+
+    func updateResults() {
+        let path = getInputTextDirectory()
         let url = URL(filePath: String(path))
 
         results.removeAll()
@@ -229,7 +234,14 @@ class View: NSView {
         for file in files {
             let path = file.path()
 
-            if !path.hasPrefix(inputText) {
+            if path.count < inputText.count {
+                continue
+            }
+
+            if path.compare(
+                inputText, options: .caseInsensitive,
+                range: inputText.startIndex..<inputText.endIndex) != .orderedSame
+            {
                 continue
             }
 
@@ -325,6 +337,7 @@ class Delegate: NSObject, NSApplicationDelegate {
 
                 window.isReleasedWhenClosed = false
 
+                self.view.inputText = self.view.getInputTextDirectory()
                 self.view.updateResults()
 
                 window.titleVisibility = .hidden
