@@ -31,12 +31,29 @@ let theme =
         )
     }
 
+let inputFont = CTFont("Menlo" as CFString, size: 24)
+let resultFont = CTFont("Menlo" as CFString, size: 16)
+
+let attributes: [NSAttributedString.Key: Any] = [
+    .font: inputFont,
+    .foregroundColor: theme.foreground,
+]
+
+let resultAttributes: [NSAttributedString.Key: Any] = [
+    .font: resultFont,
+    .foregroundColor: theme.foreground,
+]
+
+let selectedResultAttributes: [NSAttributedString.Key: Any] = [
+    .font: resultFont,
+    .foregroundColor: theme.selected,
+]
+
 class View: NSView {
     var previouslyActivateApp: NSRunningApplication?
     var inputText = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
     var results: [String] = []
     var selectedResultIndex = 0
-    let font = CTFont("Menlo" as CFString, size: 24)
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
@@ -51,16 +68,6 @@ class View: NSView {
             } else {
                 inputText
             }
-
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: theme.foreground,
-        ]
-
-        let selectedResultAttributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: theme.selected,
-        ]
 
         let attributedString = NSAttributedString(string: string, attributes: attributes)
 
@@ -86,14 +93,14 @@ class View: NSView {
                 width: bounds.width,
                 height: 2))
 
-        var resultY = lineBounds.height * 1.25
+        var resultY = lineBounds.height * 1.4
 
         for (i, result) in results.enumerated() {
             let attributes =
                 if i == selectedResultIndex {
                     selectedResultAttributes
                 } else {
-                    attributes
+                    resultAttributes
                 }
 
             let attributedString = NSAttributedString(string: result, attributes: attributes)
@@ -125,9 +132,9 @@ class View: NSView {
                 case "\r":
                     completeResult()
                     NSWorkspace.shared.open(URL(filePath: inputText))
-                    close()
+                    close(doReturnActivation: false)
                 case "\u{1b}":  // ESC
-                    close()
+                    close(doReturnActivation: true)
                 case "\u{7f}":  // DEL
                     if event.modifierFlags.contains(.command) {
                         inputText.removeAll()
@@ -288,9 +295,12 @@ class View: NSView {
         return nil
     }
 
-    func close() {
+    func close(doReturnActivation: Bool) {
         window?.close()
-        previouslyActivateApp?.activate(from: NSRunningApplication.current)
+
+        if doReturnActivation {
+            previouslyActivateApp?.activate(from: NSRunningApplication.current)
+        }
     }
 }
 
@@ -323,7 +333,7 @@ class Delegate: NSObject, NSApplicationDelegate {
                 }
 
                 let window = Window(
-                    contentRect: NSRect(x: 0, y: 0, width: 768, height: 768),
+                    contentRect: NSRect(x: 0, y: 0, width: 768, height: 768 / 2),
                     styleMask: [.titled, .fullSizeContentView],
                     backing: .buffered, defer: false)
 
