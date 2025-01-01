@@ -1,5 +1,4 @@
 import Cocoa
-import UniformTypeIdentifiers
 
 // TODO: Cmd-Enter to open with ...?.
 // TODO: Make theme adapt while application is running.
@@ -125,7 +124,7 @@ class View: NSView {
                 context.draw(
                     cgIcon,
                     in: CGRect(
-                        x: context.textPosition.x + 2, y: context.textPosition.y - 3, width: 16,
+                        x: bounds.width - 22, y: context.textPosition.y - 4, width: 16,
                         height: 16)
                 )
             }
