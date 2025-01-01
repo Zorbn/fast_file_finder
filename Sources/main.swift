@@ -2,6 +2,7 @@ import Cocoa
 
 // TODO: Limit max number of results.
 // TODO: Cmd-Enter to open with ...?.
+// TODO: Make theme adapt while application is running.
 
 struct Theme {
     let foreground: CGColor
@@ -139,9 +140,33 @@ class View: NSView {
                     completeResult()
                 case "\r":
                     completeResult()
+
+                    // Remove trailing whitespace, allows you to type "/path/to/file " to create
+                    // "file" when "/path/to/filewithlongername" exists and would otherwise get completed.
+                    while inputText.last?.isWhitespace ?? false {
+                        inputText.removeLast()
+                    }
+
+                    if !FileManager.default.fileExists(atPath: inputText) {
+                        if inputText.last == "/" {
+                            try! FileManager.default.createDirectory(
+                                atPath: inputText, withIntermediateDirectories: true,
+                                attributes: nil)
+                        } else {
+                            FileManager.default.createFile(atPath: inputText, contents: nil)
+                        }
+                    }
+
                     NSWorkspace.shared.open(URL(filePath: inputText))
+
                     close(doReturnActivation: false)
                 case "\u{1b}":  // ESC
+                    close(doReturnActivation: true)
+                case "\u{f728}":  // Forward DEL
+                    completeResult()
+
+                    NSWorkspace.shared.recycle([URL(filePath: inputText)])
+
                     close(doReturnActivation: true)
                 case "\u{7f}":  // DEL
                     if event.modifierFlags.contains(.command) {
@@ -180,16 +205,6 @@ class View: NSView {
 
                 if needsResultsUpdate {
                     if inputText.isEmpty {
-                        inputText.append("/")
-                    }
-
-                    var isDirectory: ObjCBool = false
-
-                    if inputText.last != "/" && inputText.last != "."
-                        && FileManager.default.fileExists(
-                            atPath: inputText, isDirectory: &isDirectory)
-                        && isDirectory.boolValue
-                    {
                         inputText.append("/")
                     }
 
@@ -334,7 +349,7 @@ class Delegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         app.activate()
 
-        NSEvent.addGlobalMonitorForEvents(matching: .keyUp) { event in
+        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
             if event.characters == "\u{a0}" && event.modifierFlags.contains(.option) {
                 if let old_window = self.window.take() {
                     old_window.close()
