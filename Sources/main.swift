@@ -1,4 +1,5 @@
 import Cocoa
+import HotKey
 
 // TODO: Make theme adapt while application is running.
 
@@ -51,7 +52,6 @@ let selectedResultAttributes: [NSAttributedString.Key: Any] = [
 let maxResults = 18
 
 class View: NSView {
-    var previouslyActivateApp: NSRunningApplication?
     var inputText = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
     var results: [String] = []
     var selectedResultIndex = 0
@@ -186,15 +186,15 @@ class View: NSView {
                         NSWorkspace.shared.open(url)
                     }
 
-                    close(doReturnActivation: false)
+                    close()
                 case "\u{1b}":  // ESC
-                    close(doReturnActivation: true)
+                    close()
                 case "\u{f728}":  // Forward DEL
                     completeResult()
 
                     NSWorkspace.shared.recycle([URL(filePath: inputText)])
 
-                    close(doReturnActivation: true)
+                    close()
                 case "\u{7f}":  // DEL
                     if event.modifierFlags.contains(.command) {
                         inputText.removeAll()
@@ -347,12 +347,9 @@ class View: NSView {
         return nil
     }
 
-    func close(doReturnActivation: Bool) {
+    func close() {
         window?.close()
-
-        if doReturnActivation {
-            previouslyActivateApp?.activate(from: NSRunningApplication.current)
-        }
+        app.hide(nil)
     }
 }
 
@@ -373,50 +370,39 @@ class Window: NSWindow {
 @MainActor
 class Delegate: NSObject, NSApplicationDelegate {
     let view = View()
+    let hotKey = HotKey(key: .space, modifiers: [.option])
     var window: Window?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         app.activate()
 
-        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
-            if event.characters == "\u{a0}" && event.modifierFlags.contains(.option) {
-                if let old_window = self.window.take() {
-                    old_window.close()
-                }
-
-                let window = Window(
-                    contentRect: NSRect(x: 0, y: 0, width: 768, height: 768 / 2),
-                    styleMask: [.titled, .fullSizeContentView],
-                    backing: .buffered, defer: false)
-
-                window.isReleasedWhenClosed = false
-
-                self.view.inputText = self.view.getInputTextDirectory()
-                self.view.updateResults()
-
-                window.titleVisibility = .hidden
-                window.titlebarAppearsTransparent = true
-
-                window.level = .floating
-
-                window.contentView = self.view
-                window.center()
-                window.makeKeyAndOrderFront(self)
-                window.makeMain()
-
-                self.window = window
-
-                for running_app in NSWorkspace.shared.runningApplications {
-                    if running_app.isActive {
-                        self.view.previouslyActivateApp = running_app
-                        NSRunningApplication.current.activate(from: running_app)
-                        return
-                    }
-                }
-
-                self.view.previouslyActivateApp = nil
-                app.activate()
+        hotKey.keyDownHandler = {
+            if let old_window = self.window.take() {
+                old_window.close()
             }
+
+            let window = Window(
+                contentRect: NSRect(x: 0, y: 0, width: 768, height: 768 / 2),
+                styleMask: [.titled, .fullSizeContentView],
+                backing: .buffered, defer: false)
+
+            window.isReleasedWhenClosed = false
+
+            self.view.inputText = self.view.getInputTextDirectory()
+            self.view.updateResults()
+
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+
+            window.level = .floating
+
+            window.contentView = self.view
+            window.center()
+            window.makeKeyAndOrderFront(self)
+
+            self.window = window
+
+            app.activate()
         }
     }
 }

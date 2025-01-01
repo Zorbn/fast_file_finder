@@ -8,10 +8,14 @@ let package = Package(
     platforms: [
         .macOS(.v14)
     ],
+    dependencies: [
+        .package(url: "https://github.com/soffes/HotKey", from: "0.2.1")
+    ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .executableTarget(
-            name: "fast_file_finder")
+            name: "fast_file_finder",
+            dependencies: ["HotKey"])
     ]
 )
