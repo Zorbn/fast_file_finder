@@ -1,6 +1,5 @@
 import Cocoa
 
-// TODO: Cmd-Enter to open with ...?.
 // TODO: Make theme adapt while application is running.
 
 struct Theme {
@@ -94,12 +93,14 @@ class View: NSView {
                 width: bounds.width,
                 height: 2))
 
+        let inputTextDirectory = getInputTextDirectory()
+
         let resultBaseAttributedString = NSAttributedString(
-            string: inputText, attributes: resultAttributes)
+            string: inputTextDirectory, attributes: attributes)
         let resultBaseLine = CTLineCreateWithAttributedString(resultBaseAttributedString)
         let resultBaseLineBounds = CTLineGetBoundsWithOptions(resultBaseLine, CTLineBoundsOptions())
 
-        let resultX = getTextOffsetX(lineWidth: resultBaseLineBounds.width)
+        let resultX = resultBaseLineBounds.width + inputX
         var resultY = lineBounds.height * 1.4
 
         for (i, result) in results.enumerated() {
@@ -112,7 +113,10 @@ class View: NSView {
 
             let icon = NSWorkspace.shared.icon(forFile: result)
 
-            let attributedString = NSAttributedString(string: result, attributes: attributes)
+            let resultFileName = String(result[inputTextDirectory.endIndex...])
+
+            let attributedString = NSAttributedString(
+                string: resultFileName, attributes: attributes)
             let line = CTLineCreateWithAttributedString(attributedString)
             let lineBounds = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
             resultY += lineBounds.height
@@ -168,7 +172,19 @@ class View: NSView {
                         }
                     }
 
-                    NSWorkspace.shared.open(URL(filePath: inputText))
+                    let url = URL(filePath: inputText)
+
+                    if event.modifierFlags.contains(.command) {
+                        if let terminalUrl = NSWorkspace.shared.urlForApplication(
+                            withBundleIdentifier: "com.apple.Terminal")
+                        {
+                            NSWorkspace.shared.open(
+                                [url], withApplicationAt: terminalUrl,
+                                configuration: NSWorkspace.OpenConfiguration())
+                        }
+                    } else {
+                        NSWorkspace.shared.open(url)
+                    }
 
                     close(doReturnActivation: false)
                 case "\u{1b}":  // ESC
@@ -297,10 +313,8 @@ class View: NSView {
                 return false
             }
 
-            if let aDotIndex = aDotIndex {
-                if let bDotIndex = bDotIndex {
-                    return aDotIndex < bDotIndex
-                }
+            if let aDotIndex = aDotIndex, let bDotIndex = bDotIndex {
+                return aDotIndex < bDotIndex
             }
 
             if a.last == "/" && b.last != "/" {
