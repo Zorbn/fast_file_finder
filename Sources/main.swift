@@ -1,6 +1,6 @@
 import Cocoa
+import UniformTypeIdentifiers
 
-// TODO: Limit max number of results.
 // TODO: Cmd-Enter to open with ...?.
 // TODO: Make theme adapt while application is running.
 
@@ -49,6 +49,8 @@ let selectedResultAttributes: [NSAttributedString.Key: Any] = [
     .font: resultFont,
     .foregroundColor: theme.selected,
 ]
+
+let maxResults = 18
 
 class View: NSView {
     var previouslyActivateApp: NSRunningApplication?
@@ -109,6 +111,8 @@ class View: NSView {
                     resultAttributes
                 }
 
+            let icon = NSWorkspace.shared.icon(forFile: result)
+
             let attributedString = NSAttributedString(string: result, attributes: attributes)
             let line = CTLineCreateWithAttributedString(attributedString)
             let lineBounds = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
@@ -117,6 +121,14 @@ class View: NSView {
             context.textPosition = CGPoint(x: resultX, y: bounds.height - resultY)
             CTLineDraw(line, context)
 
+            if let cgIcon = icon.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                context.draw(
+                    cgIcon,
+                    in: CGRect(
+                        x: context.textPosition.x + 2, y: context.textPosition.y - 3, width: 16,
+                        height: 16)
+                )
+            }
         }
     }
 
@@ -268,6 +280,10 @@ class View: NSView {
             }
 
             results.append(path)
+
+            if results.count >= maxResults {
+                break
+            }
         }
 
         results.sort { a, b in
