@@ -16,6 +16,8 @@ struct Theme {
     let border: CGColor
     let selected: CGColor
 
+    var appearanceName: NSAppearance.Name?
+
     let attributes: [NSAttributedString.Key: Any]
     let resultAttributes: [NSAttributedString.Key: Any]
     let selectedResultAttributes: [NSAttributedString.Key: Any]
@@ -59,11 +61,16 @@ struct Theme {
         )
 
     static func forEffectiveAppearance() -> Theme {
-        if app.effectiveAppearance.name == .darkAqua {
-            Theme.DARK
-        } else {
-            Theme.LIGHT
-        }
+        var theme =
+            if app.effectiveAppearance.name == .darkAqua {
+                Theme.DARK
+            } else {
+                Theme.LIGHT
+            }
+
+        theme.appearanceName = app.effectiveAppearance.name
+
+        return theme
     }
 }
 
@@ -75,6 +82,10 @@ class View: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+
+        if theme.appearanceName != app.effectiveAppearance.name {
+            theme = .forEffectiveAppearance()
+        }
 
         let context = NSGraphicsContext.current!.cgContext
 
@@ -389,16 +400,9 @@ class Delegate: NSObject, NSApplicationDelegate {
     let view = View()
     let hotKey = HotKey(key: .space, modifiers: [.option])
     var window: Window?
-    var appearanceObservation: NSKeyValueObservation?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         app.activate()
-
-        appearanceObservation = app.observe(\.effectiveAppearance) { _, _ in
-            Task { @MainActor in
-                self.view.theme = .forEffectiveAppearance()
-            }
-        }
 
         hotKey.keyDownHandler = {
             if let old_window = self.window.take() {
