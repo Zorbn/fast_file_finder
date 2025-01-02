@@ -1,60 +1,77 @@
 import Cocoa
 import HotKey
 
-// TODO: Make theme adapt while application is running.
+let app = NSApplication.shared
+app.setActivationPolicy(.accessory)
 
+let inputFont = CTFont("Menlo" as CFString, size: 24)
+let resultFont = CTFont("Menlo" as CFString, size: 16)
+let backgroundAlpha = 1.0
+let maxResults = 18
+
+@MainActor
 struct Theme {
     let foreground: CGColor
     let background: CGColor
     let border: CGColor
     let selected: CGColor
-}
 
-let app = NSApplication.shared
-app.setActivationPolicy(.accessory)
+    let attributes: [NSAttributedString.Key: Any]
+    let resultAttributes: [NSAttributedString.Key: Any]
+    let selectedResultAttributes: [NSAttributedString.Key: Any]
 
-let backgroundAlpha = 1.0
-let theme =
-    if app.effectiveAppearance.name == .darkAqua {
-        Theme(
-            foreground: CGColor(red: 1, green: 1, blue: 1, alpha: 1),
-            background: CGColor(red: 0, green: 0, blue: 0, alpha: backgroundAlpha),
-            border: CGColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1),
-            selected: CGColor(red: 0, green: 0.8, blue: 0, alpha: 1)
-        )
-    } else {
+    init(foreground: CGColor, background: CGColor, border: CGColor, selected: CGColor) {
+        self.foreground = foreground
+        self.background = background
+        self.border = border
+        self.selected = selected
+
+        attributes = [
+            .font: inputFont,
+            .foregroundColor: foreground,
+        ]
+
+        resultAttributes = [
+            .font: resultFont,
+            .foregroundColor: foreground,
+        ]
+
+        selectedResultAttributes = [
+            .font: resultFont,
+            .foregroundColor: selected,
+        ]
+    }
+
+    static let LIGHT =
         Theme(
             foreground: CGColor(red: 0, green: 0, blue: 0, alpha: 1),
             background: CGColor(red: 1, green: 1, blue: 1, alpha: backgroundAlpha),
             border: CGColor(red: 0.8, green: 0.8, blue: 0.8, alpha: 1),
             selected: CGColor(red: 0, green: 0.5, blue: 0, alpha: 1)
         )
+
+    static let DARK =
+        Theme(
+            foreground: CGColor(red: 1, green: 1, blue: 1, alpha: 1),
+            background: CGColor(red: 0, green: 0, blue: 0, alpha: backgroundAlpha),
+            border: CGColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1),
+            selected: CGColor(red: 0, green: 0.8, blue: 0, alpha: 1)
+        )
+
+    static func forEffectiveAppearance() -> Theme {
+        if app.effectiveAppearance.name == .darkAqua {
+            Theme.DARK
+        } else {
+            Theme.LIGHT
+        }
     }
-
-let inputFont = CTFont("Menlo" as CFString, size: 24)
-let resultFont = CTFont("Menlo" as CFString, size: 16)
-
-let attributes: [NSAttributedString.Key: Any] = [
-    .font: inputFont,
-    .foregroundColor: theme.foreground,
-]
-
-let resultAttributes: [NSAttributedString.Key: Any] = [
-    .font: resultFont,
-    .foregroundColor: theme.foreground,
-]
-
-let selectedResultAttributes: [NSAttributedString.Key: Any] = [
-    .font: resultFont,
-    .foregroundColor: theme.selected,
-]
-
-let maxResults = 18
+}
 
 class View: NSView {
     var inputText = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
     var results: [String] = []
     var selectedResultIndex = 0
+    var theme = Theme.forEffectiveAppearance()
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
@@ -70,7 +87,7 @@ class View: NSView {
                 inputText
             }
 
-        let attributedString = NSAttributedString(string: string, attributes: attributes)
+        let attributedString = NSAttributedString(string: string, attributes: theme.attributes)
         let line = CTLineCreateWithAttributedString(attributedString)
         let lineBounds = CTLineGetBoundsWithOptions(line, CTLineBoundsOptions())
 
@@ -96,7 +113,7 @@ class View: NSView {
         let inputTextDirectory = getInputTextDirectory()
 
         let resultBaseAttributedString = NSAttributedString(
-            string: inputTextDirectory, attributes: attributes)
+            string: inputTextDirectory, attributes: theme.attributes)
         let resultBaseLine = CTLineCreateWithAttributedString(resultBaseAttributedString)
         let resultBaseLineBounds = CTLineGetBoundsWithOptions(resultBaseLine, CTLineBoundsOptions())
 
@@ -106,9 +123,9 @@ class View: NSView {
         for (i, result) in results.enumerated() {
             let attributes =
                 if i == selectedResultIndex {
-                    selectedResultAttributes
+                    theme.selectedResultAttributes
                 } else {
-                    resultAttributes
+                    theme.resultAttributes
                 }
 
             let icon = NSWorkspace.shared.icon(forFile: result)
@@ -372,9 +389,16 @@ class Delegate: NSObject, NSApplicationDelegate {
     let view = View()
     let hotKey = HotKey(key: .space, modifiers: [.option])
     var window: Window?
+    var appearanceObservation: NSKeyValueObservation?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         app.activate()
+
+        appearanceObservation = app.observe(\.effectiveAppearance) { _, _ in
+            Task { @MainActor in
+                self.view.theme = .forEffectiveAppearance()
+            }
+        }
 
         hotKey.keyDownHandler = {
             if let old_window = self.window.take() {
