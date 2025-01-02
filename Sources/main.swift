@@ -168,106 +168,108 @@ class View: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
-        if let characters = event.characters {
-            var needsResultsUpdate = true
+        guard let characters = event.characters else {
+            return
+        }
 
-            for c in characters {
-                switch c {
-                case "\u{f700}":  // Up
-                    selectedResultIndex = max(selectedResultIndex - 1, 0)
-                    needsResultsUpdate = false
-                case "\u{f701}":  // Down
-                    selectedResultIndex = min(selectedResultIndex + 1, results.count - 1)
-                    needsResultsUpdate = false
-                case "\t":
-                    completeResult()
-                case "\r":
-                    completeResult()
+        var needsResultsUpdate = true
 
-                    // Remove trailing whitespace, allows you to type "/path/to/file " to create
-                    // "file" when "/path/to/filewithlongername" exists and would otherwise get completed.
-                    while inputText.last?.isWhitespace ?? false {
-                        inputText.removeLast()
-                    }
+        for c in characters {
+            switch c {
+            case "\u{f700}":  // Up
+                selectedResultIndex = max(selectedResultIndex - 1, 0)
+                needsResultsUpdate = false
+            case "\u{f701}":  // Down
+                selectedResultIndex = min(selectedResultIndex + 1, results.count - 1)
+                needsResultsUpdate = false
+            case "\t":
+                completeResult()
+            case "\r":
+                completeResult()
 
-                    if !FileManager.default.fileExists(atPath: inputText) {
-                        if inputText.last == "/" {
-                            try! FileManager.default.createDirectory(
-                                atPath: inputText, withIntermediateDirectories: true,
-                                attributes: nil)
-                        } else {
-                            FileManager.default.createFile(atPath: inputText, contents: nil)
-                        }
-                    }
+                // Remove trailing whitespace, allows you to type "/path/to/file " to create
+                // "file" when "/path/to/filewithlongername" exists and would otherwise get completed.
+                while inputText.last?.isWhitespace ?? false {
+                    inputText.removeLast()
+                }
 
-                    let url = URL(filePath: inputText)
-
-                    if event.modifierFlags.contains(.command) {
-                        if let terminalUrl = NSWorkspace.shared.urlForApplication(
-                            withBundleIdentifier: "com.apple.Terminal")
-                        {
-                            NSWorkspace.shared.open(
-                                [url], withApplicationAt: terminalUrl,
-                                configuration: NSWorkspace.OpenConfiguration())
-                        }
-                    } else {
-                        NSWorkspace.shared.open(url)
-                    }
-
-                    close()
-                case "\u{1b}":  // ESC
-                    close()
-                case "\u{f728}":  // Forward DEL
-                    completeResult()
-
-                    NSWorkspace.shared.recycle([URL(filePath: inputText)])
-
-                    close()
-                case "\u{7f}":  // DEL
-                    if event.modifierFlags.contains(.command) {
-                        inputText.removeAll()
-                        break
-                    }
-
+                if !FileManager.default.fileExists(atPath: inputText) {
                     if inputText.last == "/" {
-                        inputText.removeLast()
-
-                        while inputText.last != "/" && !inputText.isEmpty {
-                            inputText.removeLast()
-                        }
-
-                        break
+                        try! FileManager.default.createDirectory(
+                            atPath: inputText, withIntermediateDirectories: true,
+                            attributes: nil)
+                    } else {
+                        FileManager.default.createFile(atPath: inputText, contents: nil)
                     }
+                }
 
-                    if event.modifierFlags.contains(.option)
-                        || event.modifierFlags.contains(.control)
+                let url = URL(filePath: inputText)
+
+                if event.modifierFlags.contains(.command) {
+                    if let terminalUrl = NSWorkspace.shared.urlForApplication(
+                        withBundleIdentifier: "com.apple.Terminal")
                     {
-                        _ = inputText.popLast()
+                        NSWorkspace.shared.open(
+                            [url], withApplicationAt: terminalUrl,
+                            configuration: NSWorkspace.OpenConfiguration())
+                    }
+                } else {
+                    NSWorkspace.shared.open(url)
+                }
 
-                        while !inputText.isEmpty && inputText.last != "/" {
-                            inputText.removeLast()
-                        }
+                close()
+            case "\u{1b}":  // ESC
+                close()
+            case "\u{f728}":  // Forward DEL
+                completeResult()
 
-                        break
+                NSWorkspace.shared.recycle([URL(filePath: inputText)])
+
+                close()
+            case "\u{7f}":  // DEL
+                if event.modifierFlags.contains(.command) {
+                    inputText.removeAll()
+                    break
+                }
+
+                if inputText.last == "/" {
+                    inputText.removeLast()
+
+                    while inputText.last != "/" && !inputText.isEmpty {
+                        inputText.removeLast()
                     }
 
+                    break
+                }
+
+                if event.modifierFlags.contains(.option)
+                    || event.modifierFlags.contains(.control)
+                {
                     _ = inputText.popLast()
-                default:
-                    if c.isLetter || c.isNumber || c.isSymbol || c.isPunctuation || c == " " {
-                        inputText.append(c)
-                    }
-                }
 
-                if needsResultsUpdate {
-                    if inputText.isEmpty {
-                        inputText.append("/")
+                    while !inputText.isEmpty && inputText.last != "/" {
+                        inputText.removeLast()
                     }
 
-                    updateResults()
+                    break
                 }
 
-                setNeedsDisplay(bounds)
+                _ = inputText.popLast()
+            default:
+                if c.isLetter || c.isNumber || c.isSymbol || c.isPunctuation || c == " " {
+                    inputText.append(c)
+                }
             }
+
+            if needsResultsUpdate {
+                if inputText.isEmpty {
+                    inputText.append("/")
+                }
+
+                updateResults()
+            }
+
+            setNeedsDisplay(bounds)
         }
     }
 
