@@ -194,11 +194,12 @@ class View: NSView {
                 }
 
                 if !FileManager.default.fileExists(atPath: inputText) {
-                    if inputText.last == "/" {
-                        try! FileManager.default.createDirectory(
-                            atPath: inputText, withIntermediateDirectories: true,
-                            attributes: nil)
-                    } else {
+                    let directory = getInputTextDirectory()
+                    try! FileManager.default.createDirectory(
+                        atPath: directory, withIntermediateDirectories: true,
+                        attributes: nil)
+
+                    if inputText.last != "/" {
                         FileManager.default.createFile(atPath: inputText, contents: nil)
                     }
                 }
