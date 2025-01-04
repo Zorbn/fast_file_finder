@@ -76,6 +76,53 @@ struct Theme {
     }
 }
 
+struct SortFile {
+    let fileIndex: Int
+    let score: Double
+}
+
+func asciiToLowercase(value: UInt8) -> UInt8 {
+    if value > 64 && value < 91 {
+        value + 32
+    } else {
+        value
+    }
+}
+
+func compareFileScore(a: SortFile, b: SortFile) -> Bool {
+    a.score > b.score
+}
+
+func scoreFuzzyMatch(haystack: Substring.UTF8View, needle: Substring.UTF8View) -> Double {
+    let awardDistanceFalloff = 0.8
+    let awardMatchBonus = 1.0
+    let awardMaxAfterMismatch = 1.0
+
+    var needleIndex = needle.startIndex
+    var haystackIndex = haystack.startIndex
+
+    var score = 0.0
+    var nextMatchAward = 1.0
+
+    while needleIndex < needle.endIndex && haystackIndex < haystack.endIndex {
+        let lowercaseNeedleChar = asciiToLowercase(value: needle[needleIndex])
+        let lowercaseHaystackChar = asciiToLowercase(value: haystack[haystackIndex])
+
+        if lowercaseNeedleChar == lowercaseHaystackChar {
+            score += nextMatchAward
+            nextMatchAward += awardMatchBonus
+
+            needleIndex = needle.index(after: needleIndex)
+        }
+
+        nextMatchAward = min(awardMaxAfterMismatch, nextMatchAward * awardDistanceFalloff)
+
+        haystackIndex = haystack.index(after: haystackIndex)
+    }
+
+    return score
+}
+
 enum FindMode {
     case Normal
     case Fuzzy(directory: String, files: [String]?)
@@ -88,7 +135,7 @@ class View: NSView {
     var selectedResultIndex = 0
     var theme = Theme.forEffectiveAppearance()
 
-    var levenshteinTable: [Int] = []
+    var sortCache: [SortFile] = []
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
@@ -336,57 +383,28 @@ class View: NSView {
     }
 
     func updateResultsFuzzy(directory: String, files: [String]) {
-        var files = files
-        print(files.count)
-
         let diffStart = directory.endIndex
 
         if inputText.count <= directory.count {
             return
         }
 
-        let inputText = inputText[diffStart...]
+        let inputText = inputText[diffStart...].utf8
 
-        files.sort { a, b in
-            scoreFuzzyMatch(haystack: a[diffStart...], needle: inputText)
-                > scoreFuzzyMatch(haystack: b[diffStart...], needle: inputText)
+        sortCache.removeAll(keepingCapacity: true)
+
+        for i in 0..<files.count {
+            let score = scoreFuzzyMatch(haystack: files[i][diffStart...].utf8, needle: inputText)
+            sortCache.append(SortFile(fileIndex: i, score: score))
         }
 
-        for i in 0..<min(maxResults, files.count) {
-            results.append(files[i])
+        sortCache.sort(by: compareFileScore)
+
+        for i in 0..<min(maxResults, sortCache.count) {
+            results.append(files[sortCache[i].fileIndex])
         }
     }
 
-    func scoreFuzzyMatch(haystack: String.SubSequence, needle: String.SubSequence) -> Double {
-        let awardDistanceFalloff = 0.8
-        let awardMatchBonus = 1.0
-        let awardMaxAfterMismatch = 1.0
-
-        var needleIndex = needle.startIndex
-        var haystackIndex = haystack.startIndex
-
-        var score = 0.0
-        var nextMatchAward = 1.0
-
-        while needleIndex < needle.endIndex && haystackIndex < haystack.endIndex {
-            if needle[needleIndex...needleIndex].compare(
-                haystack[haystackIndex...haystackIndex], options: .caseInsensitive) == .orderedSame
-            {
-                score += nextMatchAward
-                nextMatchAward += awardMatchBonus
-
-                needleIndex = needle.index(after: needleIndex)
-            }
-
-            nextMatchAward = min(awardMaxAfterMismatch, nextMatchAward * awardDistanceFalloff)
-
-            haystackIndex = haystack.index(after: haystackIndex)
-        }
-
-        return score
-    }
-
-    // TODO: Maybe have an optional limit here? Like 100k files?
     func getAllFilesInDirectory(_ directory: String) -> [String] {
         var files: [String] = []
 
