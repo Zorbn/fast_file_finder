@@ -1,6 +1,8 @@
 import Cocoa
 import HotKey
 
+// TODO: Fix fuzzy finding being very slow.
+
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
@@ -74,11 +76,19 @@ struct Theme {
     }
 }
 
+enum FindMode {
+    case Normal
+    case Fuzzy(directory: String, files: [String]?)
+}
+
 class View: NSView {
+    var mode = FindMode.Normal
     var inputText = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
     var results: [String] = []
     var selectedResultIndex = 0
     var theme = Theme.forEffectiveAppearance()
+
+    var levenshteinTable: [Int] = []
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
@@ -121,10 +131,9 @@ class View: NSView {
                 width: bounds.width,
                 height: 2))
 
-        let inputTextDirectory = getInputTextDirectory()
-
+        let resultBase = getResultBase()
         let resultBaseAttributedString = NSAttributedString(
-            string: inputTextDirectory, attributes: theme.attributes)
+            string: resultBase, attributes: theme.attributes)
         let resultBaseLine = CTLineCreateWithAttributedString(resultBaseAttributedString)
         let resultBaseLineBounds = CTLineGetBoundsWithOptions(resultBaseLine, CTLineBoundsOptions())
 
@@ -141,7 +150,7 @@ class View: NSView {
 
             let icon = NSWorkspace.shared.icon(forFile: result)
 
-            let resultFileName = String(result[inputTextDirectory.endIndex...])
+            let resultFileName = String(result[resultBase.endIndex...])
 
             let attributedString = NSAttributedString(
                 string: resultFileName, attributes: attributes)
@@ -229,7 +238,7 @@ class View: NSView {
                 close()
             case "\u{7f}":  // DEL
                 if event.modifierFlags.contains(.command) {
-                    inputText.removeAll()
+                    inputText.removeAll(keepingCapacity: true)
                     break
                 }
 
@@ -257,7 +266,9 @@ class View: NSView {
 
                 _ = inputText.popLast()
             default:
-                if c.isLetter || c.isNumber || c.isSymbol || c.isPunctuation || c == " " {
+                if c == "t" && event.modifierFlags.contains(.command) {
+                    mode = .Fuzzy(directory: getInputTextDirectory(), files: nil)
+                } else if c.isLetter || c.isNumber || c.isSymbol || c.isPunctuation || c == " " {
                     inputText.append(c)
                 }
             }
@@ -284,6 +295,13 @@ class View: NSView {
         }
     }
 
+    func getResultBase() -> String {
+        switch mode {
+        case .Normal: getInputTextDirectory()
+        case .Fuzzy(let directory, _): directory
+        }
+    }
+
     func getInputTextDirectory() -> String {
         let path =
             if let index = inputText.lastIndex(of: "/") {
@@ -296,11 +314,100 @@ class View: NSView {
     }
 
     func updateResults() {
+        results.removeAll(keepingCapacity: true)
+        selectedResultIndex = 0
+
+        switch mode {
+        case .Normal:
+            updateResultsNormal()
+        case .Fuzzy(let directory, var files):
+            if !inputText.hasPrefix(directory) {
+                mode = .Normal
+                return updateResults()
+            }
+
+            if files == nil {
+                files = getAllFilesInDirectory(directory)
+                mode = .Fuzzy(directory: directory, files: files)
+            }
+
+            updateResultsFuzzy(directory: directory, files: files!)
+        }
+    }
+
+    func updateResultsFuzzy(directory: String, files: [String]) {
+        var files = files
+        print(files.count)
+
+        let diffStart = directory.endIndex
+
+        if inputText.count <= directory.count {
+            return
+        }
+
+        let inputText = inputText[diffStart...]
+
+        files.sort { a, b in
+            scoreFuzzyMatch(haystack: a[diffStart...], needle: inputText)
+                > scoreFuzzyMatch(haystack: b[diffStart...], needle: inputText)
+        }
+
+        for i in 0..<min(maxResults, files.count) {
+            results.append(files[i])
+        }
+    }
+
+    func scoreFuzzyMatch(haystack: String.SubSequence, needle: String.SubSequence) -> Double {
+        let awardDistanceFalloff = 0.8
+        let awardMatchBonus = 1.0
+        let awardMaxAfterMismatch = 1.0
+
+        var needleIndex = needle.startIndex
+        var haystackIndex = haystack.startIndex
+
+        var score = 0.0
+        var nextMatchAward = 1.0
+
+        while needleIndex < needle.endIndex && haystackIndex < haystack.endIndex {
+            if needle[needleIndex...needleIndex].compare(
+                haystack[haystackIndex...haystackIndex], options: .caseInsensitive) == .orderedSame
+            {
+                score += nextMatchAward
+                nextMatchAward += awardMatchBonus
+
+                needleIndex = needle.index(after: needleIndex)
+            }
+
+            nextMatchAward = min(awardMaxAfterMismatch, nextMatchAward * awardDistanceFalloff)
+
+            haystackIndex = haystack.index(after: haystackIndex)
+        }
+
+        return score
+    }
+
+    // TODO: Maybe have an optional limit here? Like 100k files?
+    func getAllFilesInDirectory(_ directory: String) -> [String] {
+        var files: [String] = []
+
+        guard
+            let enumerator = FileManager.default.enumerator(
+                at: URL(filePath: directory), includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants])
+        else {
+            return files
+        }
+
+        for case let fileUrl as URL in enumerator {
+            files.append(fileUrl.path())
+        }
+
+        return files
+    }
+
+    func updateResultsNormal() {
         let path = getInputTextDirectory()
         let url = URL(filePath: String(path))
-
-        results.removeAll()
-        selectedResultIndex = 0
 
         let files: [URL]
 
@@ -379,6 +486,8 @@ class View: NSView {
     }
 
     func close() {
+        inputText = getResultBase()
+
         window?.close()
         app.hide(nil)
     }
@@ -419,7 +528,7 @@ class Delegate: NSObject, NSApplicationDelegate {
 
             window.isReleasedWhenClosed = false
 
-            self.view.inputText = self.view.getInputTextDirectory()
+            self.view.mode = .Normal
             self.view.updateResults()
 
             window.titleVisibility = .hidden
