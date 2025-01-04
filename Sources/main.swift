@@ -10,6 +10,7 @@ let inputFont = CTFont("Menlo" as CFString, size: 24)
 let resultFont = CTFont("Menlo" as CFString, size: 16)
 let backgroundAlpha = 1.0
 let maxResults = 18
+let fuzzyMaxDepth = 4
 
 @MainActor
 struct Theme {
@@ -374,7 +375,7 @@ class View: NSView {
             }
 
             if files == nil {
-                files = getAllFilesInDirectory(directory)
+                files = getAllFilesInDirectory(directory, maxDepth: fuzzyMaxDepth)
                 mode = .Fuzzy(directory: directory, files: files)
             }
 
@@ -405,7 +406,7 @@ class View: NSView {
         }
     }
 
-    func getAllFilesInDirectory(_ directory: String) -> [String] {
+    func getAllFilesInDirectory(_ directory: String, maxDepth: Int) -> [String] {
         var files: [String] = []
 
         guard
@@ -418,6 +419,10 @@ class View: NSView {
 
         for case let fileUrl as URL in enumerator {
             files.append(fileUrl.path())
+
+            if fileUrl.hasDirectoryPath && enumerator.level >= maxDepth {
+                enumerator.skipDescendants()
+            }
         }
 
         return files
