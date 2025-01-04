@@ -1,8 +1,6 @@
 import Cocoa
 import HotKey
 
-// TODO: Fix fuzzy finding being very slow.
-
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
