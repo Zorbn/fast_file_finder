@@ -338,6 +338,7 @@ class View: NSView {
     func completeResult() {
         if selectedResultIndex >= 0 && selectedResultIndex < results.count {
             inputText = results[selectedResultIndex]
+            mode = .Normal
         }
     }
 
