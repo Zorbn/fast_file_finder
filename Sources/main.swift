@@ -539,8 +539,8 @@ class Delegate: NSObject, NSApplicationDelegate {
         app.activate()
 
         hotKey.keyDownHandler = {
-            if let old_window = self.window.take() {
-                old_window.close()
+            if let oldWindow = self.window.take() {
+                oldWindow.close()
             }
 
             let window = Window(
