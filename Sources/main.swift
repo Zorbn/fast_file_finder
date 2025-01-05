@@ -417,7 +417,7 @@ class View: NSView {
         }
 
         for case let fileUrl as URL in enumerator {
-            files.append(fileUrl.path())
+            files.append(fileUrl.path(percentEncoded: false))
 
             if fileUrl.hasDirectoryPath && enumerator.level >= maxDepth {
                 enumerator.skipDescendants()
