@@ -385,7 +385,7 @@ class View: NSView {
         let diffStart = directory.endIndex
 
         if inputText.count <= directory.count {
-            return
+            return updateResultsNormal()
         }
 
         let inputText = inputText[diffStart...].utf8
